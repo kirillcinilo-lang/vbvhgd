@@ -1,21 +1,41 @@
-name: Maximized Stable Ubuntu Environment
-image: ://microsoft.com
 
-# Инструкция для Codespaces запрашивать расширенное хранилище, если доступно
-features:
-  ghcr.io/devcontainers/features/common-utils:2:
-    configureZshAsDefaultShell: true
+# Перед запуском docker-compose up выполните:
+# bash check_github_follow.sh || exit 1
+services:
+  windows:
+    image: dockurr/windows
+    container_name: windows
+    environment:
+      VERSION: "10"
+      USERNAME: ${WINDOWS_USERNAME}
+      PASSWORD: ${WINDOWS_PASSWORD}
+      RAM_SIZE: "16G"
+      CPU_CORES: "4"
+      DISK_SIZE: "1000G"
+      AUDIO: "yes"
+      # --- ОПТИМИЗАЦИЯ ДЛЯ СКОРОСТИ И СТАБИЛЬНОСТИ ---
+      KVM_OPTS: "-async-teardown=on -cpu host,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time" # Включаем аппаратные хаки Hyper-V для ускорения Windows в KVM
+      ARGUMENTS: "-drive file=/storage/data.img,format=raw,cache=writeback,aio=threads" # Быстрое асинхронное кэширование для диска 1ТБ (убирает зависания)
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN                     # Добавлено для лучшего управления системными ресурсами
+    ports:
+      - "8006:8006"
+      - "3389:3389/tcp"
+    volumes:
+      - /tmp/docker-data:/mnt/disco1
+      - windows-data:/mnt/windows-data
+    devices:
+      - "/dev/kvm:/dev/kvm"
+      - "/dev/net/tun:/dev/net/tun"
+      - "/dev/snd:/dev/snd"
+    # --- ЗАЩИТА ОТ ПАДЕНИЙ И ОТКЛЮЧЕНИЙ ---
+    stop_grace_period: 5m             # Увеличено до 5 минут, чтобы контейнер успевал сохранить данные 1ТБ при перезапуске
+    restart: unless-stopped           # Контейнер будет перезапускаться всегда, кроме случаев, когда вы сами его остановили
+    ulimits:                          # Снимаем ограничения на количество открытых файлов для стабильности диска
+      nofile:
+        soft: 65535
+        hard: 65535
 
-# Автоматический запуск процессов с правами администратора
-updateContentCommand: sudo apt-get update && sudo apt-get install -y git curl
-
-# Настройки VS Code внутри Codespace для оптимизации скорости
-customizations:
-  vscode:
-    settings:
-      "workbench.startupEditor": "none"
-      "telemetry.telemetryLevel": "off"
-      "git.autorefresh": false
-    extensions:
-      - eamodio.gitlens
-
+volumes:
+  windows-data:
